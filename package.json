@@ -1,0 +1,24 @@
+{
+  "name": "splitter",
+  "version": "0.0.0",
+  "description": "Solidity practice project",
+  "main": "index.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "npm run testrpc > /dev/null & truffle test; npm run testrpc-kill",
+    "testrpc": "$(npm bin)/testrpc -a 10 --network-id=42",
+    "testrpc-kill": "kill $(ps aux | grep '[t]estrpc' | awk '{print $2}')"
+  },
+  "author": "mbaxter",
+  "license": "ISC",
+  "devDependencies": {
+    "chai": "4.1.1",
+    "ethereumjs-testrpc": "4.1.1"
+  },
+  "dependencies": {
+    "co": "4.6.0",
+    "web3": "1.0.0-beta.18"
+  }
+}
