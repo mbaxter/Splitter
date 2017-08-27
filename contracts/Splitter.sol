@@ -6,8 +6,8 @@ contract Splitter {
 		address b;
 	}
 
-	event SetRecipients(address indexed funder, address indexed recipientA, address indexed recipientB);
-	event DisburseFunds(address indexed funder, address indexed recipientA, address indexed recipientB, uint valueDisbursedToEachRecipient);
+	event LogSetRecipients(address indexed funder, address indexed recipientA, address indexed recipientB);
+	event LogDisburseFunds(address indexed funder, address indexed recipientA, address indexed recipientB, uint valueDisbursedToEachRecipient);
 
 	mapping(address => Recipients) recipients;
 
@@ -27,7 +27,7 @@ contract Splitter {
 
 		// Check passed, update our state
 		recipients[msg.sender] = Recipients(recipientA, recipientB);
-		SetRecipients(msg.sender, recipientA, recipientB);
+		LogSetRecipients(msg.sender, recipientA, recipientB);
 	}
 
 	function disburseFunds()
@@ -45,6 +45,6 @@ contract Splitter {
 		uint splitValue = msg.value / 2;
 		disbursees.a.transfer(splitValue);
 		disbursees.b.transfer(splitValue);
-		DisburseFunds(msg.sender, disbursees.a, disbursees.b, splitValue);
+		LogDisburseFunds(msg.sender, disbursees.a, disbursees.b, splitValue);
 	}
 }
