@@ -9,9 +9,7 @@ const assertTransactionFails = function*(action, gasLimit, web3) {
 		assert.equal(receipt.gasUsed, gasLimit, "Failed transaction should consume all gas");
 	} catch (err) {
 		const errorMsg = (err + '').toLowerCase();
-		if (!testRpcTxFailedRegex.test(errorMsg) && !gethTxFailedRegex.test(errorMsg)) {
-			throw err;
-		}
+		assert.ok(testRpcTxFailedRegex.test(errorMsg) || gethTxFailedRegex.test(errorMsg), `Error should indicate tx failed: ${errorMsg}`);
 	}
 };
 
