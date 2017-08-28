@@ -9,7 +9,7 @@ contract Splitter {
 	event LogSetRecipients(address indexed funder, address indexed recipientA, address indexed recipientB);
 	event LogDisburseFunds(address indexed funder, address indexed recipientA, address indexed recipientB, uint valueDisbursedToEachRecipient);
 
-	mapping(address => Recipients) recipients;
+	mapping(address => Recipients) public recipients;
 
 	function Splitter(){}
 

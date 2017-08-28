@@ -59,6 +59,9 @@ contract('Splitter', function(accounts) {
 				return co(function*(){
 					const txHash = yield splitter.setRecipients(accounts[1], accounts[2], txOptions);
 					assert(txHash.receipt.gasUsed < gasLimit, "Transaction should succeed");
+					const recipients = yield splitter.recipients.call(accounts[0], txOptions);
+					assert.equal(recipients[0], accounts[1]);
+					assert.equal(recipients[1], accounts[2]);
 				});
 			});
 		});
