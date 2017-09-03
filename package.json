@@ -11,7 +11,8 @@
     "test": "npm run testrpc > /dev/null & truffle test; npm run testrpc-kill",
     "testrpc": "$(npm bin)/testrpc -a 10 --network-id=42",
     "testrpc-kill": "kill $(ps aux | grep '[t]estrpc' | awk '{print $2}')",
-    "deploy-contracts": "$(npm bin)/truffle migrate --network net42 --reset"
+    "deploy-contracts": "$(npm bin)/truffle migrate --network net42 --reset",
+    "lint": "$(npm bin)/eslint {test, test-util}"
   },
   "author": "mbaxter",
   "license": "ISC",
@@ -19,11 +20,11 @@
     "bluebird": "^3.5.0",
     "chai": "4.1.1",
     "eslint": "4.5.0",
+    "eslint-plugin-async-await": "0.0.0",
     "ethereumjs-testrpc": "4.1.1",
     "ethereumjs-util": "^5.1.2"
   },
   "dependencies": {
-    "co": "4.6.0",
     "truffle": "3.4.9",
     "web3": "1.0.0-beta.18"
   }
