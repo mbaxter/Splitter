@@ -7,9 +7,11 @@
     "test": "test"
   },
   "scripts": {
+    "compile": "$(npm bin)/truffle compile",
     "test": "npm run testrpc > /dev/null & truffle test; npm run testrpc-kill",
     "testrpc": "$(npm bin)/testrpc -a 10 --network-id=42",
-    "testrpc-kill": "kill $(ps aux | grep '[t]estrpc' | awk '{print $2}')"
+    "testrpc-kill": "kill $(ps aux | grep '[t]estrpc' | awk '{print $2}')",
+    "deploy-contracts": "$(npm bin)/truffle migrate --network net42 --reset"
   },
   "author": "mbaxter",
   "license": "ISC",
@@ -20,6 +22,7 @@
   },
   "dependencies": {
     "co": "4.6.0",
+    "truffle": "3.4.9",
     "web3": "1.0.0-beta.18"
   }
 }

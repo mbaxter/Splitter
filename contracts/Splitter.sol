@@ -1,22 +1,24 @@
 pragma solidity ^0.4.4;
 
-contract Splitter {
+import "./Owned.sol";
+
+contract Splitter is Owned {
 	struct Recipients {
-		address a;
-		address b;
+	address a;
+	address b;
 	}
 
-	event LogSetRecipients(address indexed funder, address indexed recipientA, address indexed recipientB);
-	event LogDisburseFunds(address indexed funder, address indexed recipientA, address indexed recipientB, uint valueDisbursedToEachRecipient);
+	event LogSendFunds(address sender, uint funds);
+	event LogWithdrawal(address recipient, uint amount);
 
-	mapping(address => Recipients) public recipients;
+	Recipients public recipients;
 
-	function Splitter(){}
+	mapping(address => uint) public balance;
 
 	function setRecipients(address recipientA, address recipientB)
-		public
+		assertFromOwner
 	{
-		// Addresses must be non-zero
+		//Addresses must be non-zero
 		require(recipientA != 0x0);
 		require(recipientB != 0x0);
 		// Recipients must be distinct addresses
@@ -24,27 +26,61 @@ contract Splitter {
 		// Sender cannot also be a recipient
 		require(msg.sender != recipientA);
 		require(msg.sender != recipientB);
+		// This contract cannot be a recipient
+		require(this != recipientA);
+		require(this != recipientB);
 
 		// Check passed, update our state
-		recipients[msg.sender] = Recipients(recipientA, recipientB);
-		LogSetRecipients(msg.sender, recipientA, recipientB);
+		recipients.a = recipientA;
+		recipients.b = recipientB;
 	}
 
-	function disburseFunds()
+	function withdrawFunds()
+		public
+		returns (bool success)
+	{
+		// Sender must have a positive balance
+		require(balance[msg.sender] > 0);
+
+		uint amount = balance[msg.sender];
+		// Update state
+		balance[msg.sender] = 0;
+
+		// Send refund
+		msg.sender.transfer(amount);
+
+		LogWithdrawal(msg.sender, amount);
+		return true;
+	}
+
+	function sendFunds()
 		public
 		payable
+		assertFromOwner()
 	{
-		// Value must be even and greater than 0
-		require(msg.value > 0);
-		require(msg.value % 2 == 0);
-		// Recipients must be set already
-		Recipients storage disbursees = recipients[msg.sender];
-		require(disbursees.a != 0x0);
-		require(disbursees.b != 0x0);
+		// Recipients must be set
+		require(recipients.a != 0);
+		require(recipients.b != 0);
+	
+		// Must send enough value to split
+		require(msg.value >= 2);
 
-		uint splitValue = msg.value / 2;
-		disbursees.a.transfer(splitValue);
-		disbursees.b.transfer(splitValue);
-		LogDisburseFunds(msg.sender, disbursees.a, disbursees.b, splitValue);
+		// Refund sender if value cannot be evenly split
+		if (msg.value % 2 == 1) {
+			balance[msg.sender] += 1;
+		}
+
+		// Update balance
+		uint splitAmount = msg.value / 2;
+		balance[recipients.a] += splitAmount;
+		balance[recipients.b] += splitAmount;
+
+		// Emit events
+		LogSendFunds(msg.sender, msg.value);
+	}
+
+	// Disable fallback
+	function() {
+		assert(false);
 	}
 }
