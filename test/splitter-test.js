@@ -1,6 +1,7 @@
 const co = require('co');
 const assertTxFailed = require('../test-util/assert-transaction-fails');
 let Splitter = artifacts.require("./Splitter.sol");
+const ethUtil = require('ethereumjs-util');
 
 contract('Splitter', function(accounts) {
 
@@ -13,19 +14,13 @@ contract('Splitter', function(accounts) {
 		});
 	});
 
-	describe('setRecipients', () => {
-
-		beforeEach(() => {
-			return co(function*(){
-				splitter = yield Splitter.new({from: accounts[0]});
-			});
-		});
+	describe('create contract', () => {
 
 		describe('with no recipients', () => {
 			it('should fail', () => {
 				return co(function*() {
 					const action = function*() {
-						return yield splitter.setRecipients(0,0,txOptions);
+						return yield Splitter.new(0,0, {from: accounts[0]});
 					};
 					yield assertTxFailed(action, gasLimit, web3);
 				});
@@ -36,7 +31,7 @@ contract('Splitter', function(accounts) {
 			it('should fail', () => {
 				return co(function*() {
 					const action = function*() {
-						return yield splitter.setRecipients(accounts[1], accounts[1], txOptions);
+						yield Splitter.new(accounts[1], accounts[1], {from: accounts[0]});
 					};
 					yield assertTxFailed(action, gasLimit, web3);
 				});
@@ -47,7 +42,7 @@ contract('Splitter', function(accounts) {
 			it('should fail', () => {
 				return co(function*() {
 					const action = function*() {
-						return yield splitter.setRecipients(accounts[0], accounts[2], txOptions);
+						return yield Splitter.new(accounts[0], accounts[2], txOptions);
 					};
 					yield assertTxFailed(action, gasLimit, web3);
 				});
@@ -58,7 +53,7 @@ contract('Splitter', function(accounts) {
 			it('should fail', () => {
 				return co(function*() {
 					const action = function*() {
-						return yield splitter.setRecipients(accounts[2], accounts[0], txOptions);
+						return yield Splitter.new(accounts[2], accounts[0], txOptions);
 					};
 					yield assertTxFailed(action, gasLimit, web3);
 				});
@@ -69,7 +64,10 @@ contract('Splitter', function(accounts) {
 			it('should fail', () => {
 				return co(function*() {
 					const action = function*() {
-						return yield splitter.setRecipients(splitter.address, accounts[2], txOptions);
+						// From: https://github.com/b9lab/cyclical-reference/blob/master/migrations/2_deploy_contracts.js
+						const nonce = web3.eth.getTransactionCount(txOptions.from);
+						const contractAddress = ethUtil.bufferToHex(ethUtil.generateAddress(txOptions.from, nonce));
+						return yield Splitter.new(contractAddress, accounts[2], txOptions);
 					};
 					yield assertTxFailed(action, gasLimit, web3);
 				});
@@ -80,7 +78,10 @@ contract('Splitter', function(accounts) {
 			it('should fail', () => {
 				return co(function*() {
 					const action = function*() {
-						return yield splitter.setRecipients(accounts[2], splitter.address, txOptions);
+						// From: https://github.com/b9lab/cyclical-reference/blob/master/migrations/2_deploy_contracts.js
+						const nonce = web3.eth.getTransactionCount(txOptions.from);
+						const contractAddress = ethUtil.bufferToHex(ethUtil.generateAddress(txOptions.from, nonce));
+						return yield Splitter.new(accounts[2], contractAddress, txOptions);
 					};
 					yield assertTxFailed(action, gasLimit, web3);
 				});
@@ -90,8 +91,10 @@ contract('Splitter', function(accounts) {
 		describe('with distinct recipients not equal to sender or contract', () => {
 			it('should succeed', () => {
 				return co(function*(){
-					const txHash = yield splitter.setRecipients(accounts[1], accounts[2], txOptions);
-					assert(txHash.receipt.gasUsed < gasLimit, "Transaction should succeed");
+					const splitter = yield Splitter.new(accounts[1], accounts[2], txOptions);
+					assert.ok(splitter);
+					assert.ok(splitter.address);
+
 					const recipients = yield splitter.recipients.call(txOptions);
 					assert.equal(recipients[0], accounts[1]);
 					assert.equal(recipients[1], accounts[2]);
@@ -100,205 +103,172 @@ contract('Splitter', function(accounts) {
 		});
 	});
 
-    describe('sendFunds()', () => {
+	describe('sendFunds()', () => {
+		let recipients;
+		beforeEach(() => {
+			return co(function*() {
+				splitter = yield Splitter.new(accounts[1], accounts[2], {from: accounts[0]});
+				assert(splitter, "New contract should be deployed");
+				recipients = [accounts[1], accounts[2]];
+			});
+		});
 
-        describe('without setting recipients first', () => {
+		describe('when passed a valid value', () => {
 
-	        beforeEach(() => {
-		        return co(function*() {
-			        splitter = yield Splitter.new({from: accounts[0]});
-		        });
-	        });
+			describe('that is even', () => {
 
-            it('should fail', () => {
-                return co(function*() {
-	                const action = function*() {
-		                return yield splitter.sendFunds({value: 10, gas: gasLimit});
-	                };
-	                yield assertTxFailed(action, gasLimit, web3);
-                });
-            });
-        });
+				let txHash;
+				let value;
+				beforeEach(() => {
+					return co(function*() {
+						value = 10;
+						txHash = yield splitter.sendFunds({ value: value, gas: gasLimit, from:accounts[0] });
+					});
+				});
 
-        describe('after setting recipients', () => {
+				it('should succeed', () => {
+					return co(function*() {
+						assert.ok(txHash);
+						assert(txHash.receipt.gasUsed < gasLimit);
+					});
+				});
 
-        	let recipients;
-        	let deployAndSetRecipients;
-            before((done) => {
-            	deployAndSetRecipients = function*() {
-		            splitter = yield Splitter.new({from: accounts[0]});
-		            assert(splitter, "New contract should be deployed");
-		            const txHash = yield splitter.setRecipients(accounts[1], accounts[2], txOptions);
-		            assert(txHash.receipt.gasUsed < gasLimit, "Recipients should be set successfully");
-		            recipients = [accounts[1], accounts[2]];
-	            };
-            	done();
-            });
+				it('should update recipientA\'s balance', () => {
+					return co(function*() {
+						const balance = yield splitter.balance.call(recipients[0]);
+						assert.equal(balance, value / 2);
+					});
+				});
 
-            describe('when passed a valid value', () => {
+				it('should update recipientB\'s balance', () => {
+					return co(function*() {
+						const balance = yield splitter.balance.call(recipients[1]);
+						assert.equal(balance, value / 2);
+					});
+				});
 
-	            describe('that is even', () => {
+				it('should not update the owner\'s balance', () => {
+					return co(function*() {
+						const balance = yield splitter.balance.call(txOptions.from);
+						assert.equal(balance, 0);
+					});
+				});
+			});
 
-		            let txHash;
-		            let value;
-		            before(() => {
-			            return co(function*() {
-				            yield deployAndSetRecipients();
-				            value = 10;
-				            txHash = yield splitter.sendFunds({ value: value, gas: gasLimit, from:accounts[0] });
-			            });
-		            });
+			describe('that is odd', () => {
 
-		            it('should succeed', () => {
-			            return co(function*() {
-				            assert.ok(txHash);
-				            assert(txHash.receipt.gasUsed < gasLimit);
-			            });
-		            });
+				let txHash;
+				let value;
+				beforeEach(() => {
+					return co(function*() {
+						value = 11;
+						txHash = yield splitter.sendFunds({ value: value, gas: gasLimit, from:accounts[0] });
+					});
+				});
 
-		            it('should update recipientA\'s balance', () => {
-			            return co(function*() {
-				            const balance = yield splitter.balance.call(recipients[0]);
-				            assert.equal(balance, value / 2);
-			            });
-		            });
+				it('should succeed', () => {
+					return co(function*() {
+						assert.ok(txHash);
+						assert(txHash.receipt.gasUsed < gasLimit);
+					});
+				});
 
-		            it('should update recipientB\'s balance', () => {
-			            return co(function*() {
-				            const balance = yield splitter.balance.call(recipients[1]);
-				            assert.equal(balance, value / 2);
-			            });
-		            });
+				it('should update recipientA\'s balance', () => {
+					return co(function*() {
+						const balance = yield splitter.balance.call(recipients[0]);
+						assert.equal(balance, Math.floor(value / 2));
+					});
+				});
 
-		            it('should not update the owner\'s balance', () => {
-			            return co(function*() {
-				            const balance = yield splitter.balance.call(txOptions.from);
-				            assert.equal(balance, 0);
-			            });
-		            });
-	            });
+				it('should update recipientB\'s balance', () => {
+					return co(function*() {
+						const balance = yield splitter.balance.call(recipients[1]);
+						assert.equal(balance, Math.floor(value / 2));
+					});
+				});
 
-	            describe('that is odd', () => {
+				it('should not update the owner\'s balance', () => {
+					return co(function*() {
+						const balance = yield splitter.balance.call(txOptions.from);
+						assert.equal(balance, 1);
+					});
+				});
+			});
+		});
 
-		            let txHash;
-		            let value;
-		            before(() => {
-			            return co(function*() {
-				            yield deployAndSetRecipients();
-				            value = 11;
-				            txHash = yield splitter.sendFunds({ value: value, gas: gasLimit, from:accounts[0] });
-			            });
-		            });
+		describe('when passed an invalid value', () => {
 
-		            it('should succeed', () => {
-			            return co(function*() {
-				            assert.ok(txHash);
-				            assert(txHash.receipt.gasUsed < gasLimit);
-			            });
-		            });
+			describe('of 1', () => {
 
-		            it('should update recipientA\'s balance', () => {
-			            return co(function*() {
-				            const balance = yield splitter.balance.call(recipients[0]);
-				            assert.equal(balance, Math.floor(value / 2));
-			            });
-		            });
+				it('should fail', () => {
+					return co(function*() {
+						const action = function*() {
+							return yield splitter.sendFunds({value: 1, gas: gasLimit, from:accounts[0]});
+						};
+						yield assertTxFailed(action, gasLimit, web3);
+					});
+				});
+			});
 
-		            it('should update recipientB\'s balance', () => {
-			            return co(function*() {
-				            const balance = yield splitter.balance.call(recipients[1]);
-				            assert.equal(balance, Math.floor(value / 2));
-			            });
-		            });
+			describe('of 0', () => {
 
-		            it('should not update the owner\'s balance', () => {
-			            return co(function*() {
-				            const balance = yield splitter.balance.call(txOptions.from);
-				            assert.equal(balance, 1);
-			            });
-		            });
-	            });
-            });
+				it('should fail', () => {
+					return co(function*() {
+						const action = function*() {
+							return yield splitter.sendFunds({value: 0, gas: gasLimit, from:accounts[0]});
+						};
+						yield assertTxFailed(action, gasLimit, web3);
+					});
+				});
+			});
+		});
+	});
 
-	        describe('when passed an invalid value', () => {
-		        beforeEach(() => {
-			        return co(deployAndSetRecipients);
-		        });
+	describe('withdrawFunds()', () => {
 
-		        describe('of 1', () => {
+		beforeEach(() => {
+			return co(function*() {
+				splitter = yield Splitter.new(accounts[1], accounts[2], {from: accounts[0]});
+				assert(splitter, "New contract should be deployed");
+			});
+		});
 
-			        it('should fail', () => {
-				        return co(function*() {
-					        const action = function*() {
-						        return yield splitter.sendFunds({value: 1, gas: gasLimit, from:accounts[0]});
-					        };
-					        yield assertTxFailed(action, gasLimit, web3);
-				        });
-			        });
-		        });
+		describe('for an account with no balance', () => {
+			it('should fail', () => {
+				return co(function*() {
+					const action = function*() {
+						return yield splitter.withdrawFunds({gas: gasLimit, from:accounts[3]});
+					};
+					yield assertTxFailed(action, gasLimit, web3);
+				});
+			});
+		});
 
-		        describe('of 0', () => {
+		describe('for an account with a balance', () => {
+			let txHash;
+			let account;
+			beforeEach(() => {
+				return co(function*(){
+					const value = 10;
+					account = accounts[1];
+					yield splitter.sendFunds({ value, gas: gasLimit, from:accounts[0] });
+					txHash = yield splitter.withdrawFunds({ gas: gasLimit, from:account });
+				});
+			});
 
-			        it('should fail', () => {
-				        return co(function*() {
-					        const action = function*() {
-						        return yield splitter.sendFunds({value: 0, gas: gasLimit, from:accounts[0]});
-					        };
-					        yield assertTxFailed(action, gasLimit, web3);
-				        });
-			        });
-		        });
-	        });
-        });
-    });
+			it('should succeed', () => {
+				return co(function*() {
+					assert.ok(txHash);
+					assert(txHash.receipt.gasUsed < gasLimit);
+				});
+			});
 
-    describe('withdrawFunds()', () => {
-
-	    beforeEach(() => {
-		    return co(function*() {
-			    splitter = yield Splitter.new({from: accounts[0]});
-			    assert(splitter, "New contract should be deployed");
-			    const txHash = yield splitter.setRecipients(accounts[1], accounts[2], txOptions);
-			    assert(txHash.receipt.gasUsed < gasLimit, "Recipients should be set successfully");
-		    });
-	    });
-
-	    describe('for an account with no balance', () => {
-		    it('should fail', () => {
-			    return co(function*() {
-				    const action = function*() {
-					    return yield splitter.withdrawFunds({gas: gasLimit, from:accounts[3]});
-				    };
-				    yield assertTxFailed(action, gasLimit, web3);
-			    });
-		    });
-	    });
-
-	    describe('for an account with a balance', () => {
-	    	let txHash;
-	    	let account;
-		    beforeEach(() => {
-			    return co(function*(){
-				    const value = 10;
-				    account = accounts[1];
-				    yield splitter.sendFunds({ value, gas: gasLimit, from:accounts[0] });
-				    txHash = yield splitter.withdrawFunds({ gas: gasLimit, from:account });
-			    });
-		    });
-
-		    it('should succeed', () => {
-			    return co(function*() {
-			    	assert.ok(txHash);
-				    assert(txHash.receipt.gasUsed < gasLimit);
-			    });
-		    });
-
-		    it('should zero-out the balance', () => {
-		    	return co(function*() {
-				    const actualBalance = yield splitter.balance.call(account, txOptions);
-				    assert.equal(actualBalance, 0);
-			    });
-		    });
-	    });
-    });
+			it('should zero-out the balance', () => {
+				return co(function*() {
+					const actualBalance = yield splitter.balance.call(account, txOptions);
+					assert.equal(actualBalance, 0);
+				});
+			});
+		});
+	});
 });

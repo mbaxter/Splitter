@@ -16,9 +16,11 @@
   "author": "mbaxter",
   "license": "ISC",
   "devDependencies": {
+    "bluebird": "^3.5.0",
     "chai": "4.1.1",
     "eslint": "4.5.0",
-    "ethereumjs-testrpc": "4.1.1"
+    "ethereumjs-testrpc": "4.1.1",
+    "ethereumjs-util": "^5.1.2"
   },
   "dependencies": {
     "co": "4.6.0",

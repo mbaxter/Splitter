@@ -15,8 +15,7 @@ contract Splitter is Owned {
 
 	mapping(address => uint) public balance;
 
-	function setRecipients(address recipientA, address recipientB)
-		assertFromOwner
+	function Splitter(address recipientA, address recipientB)
 	{
 		//Addresses must be non-zero
 		require(recipientA != 0x0);
@@ -58,10 +57,6 @@ contract Splitter is Owned {
 		payable
 		assertFromOwner()
 	{
-		// Recipients must be set
-		require(recipients.a != 0);
-		require(recipients.b != 0);
-	
 		// Must send enough value to split
 		require(msg.value >= 2);
 
